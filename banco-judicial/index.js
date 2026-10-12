@@ -199,6 +199,16 @@ const comandos = [
 
   comando("extrato", "Ver suas últimas movimentações"),
 
+  
+  comando("consultar_extrato", "Consultar o extrato de um membro")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addUserOption((o) =>
+      o.setName("membro")
+        .setDescription("Membro cujo extrato será consultado")
+        .setRequired(true)
+    ),
+
+
   comando("pagar", "Transferir créditos para um membro")
     .addUserOption((o) =>
       o.setName("membro")
@@ -531,6 +541,101 @@ const handlers = {
       allowedMentions: { parse: [] },
     });
   },
+
+  
+  async consultar_extrato(i) {
+    if (!ehAdmin(i)) {
+      return responder(i, "❌ Apenas administradores podem consultar extratos.");
+    }
+
+    const usuario = i.options.getUser("membro");
+
+    if (usuario.bot) {
+      return responder(i, "❌ Selecione um membro, não um bot.");
+    }
+
+    const dados = {
+      saldo: saldoDe(usuario.id) ?? 0,
+      linhas: db.prepare(`
+        SELECT * FROM transacoes
+        WHERE origem = ? OR destino = ?
+        ORDER BY id DESC LIMIT 10
+      `).all(usuario.id, usuario.id),
+      totais: db.prepare(`
+        SELECT
+          COALESCE(SUM(CASE WHEN destino = ? THEN valor ELSE 0 END), 0) AS entradas,
+          COALESCE(SUM(CASE WHEN origem = ? THEN valor ELSE 0 END), 0) AS saidas
+        FROM transacoes
+        WHERE origem = ? OR destino = ?
+      `).get(usuario.id, usuario.id, usuario.id, usuario.id),
+    };
+
+    const formatar = (valor) =>
+      `${(valor || 0).toLocaleString("pt-BR")} créditos`;
+
+    const historico = dados.linhas.length
+      ? dados.linhas.map((t) => {
+          const entrada = t.destino === usuario.id;
+          const data = new Date(t.data).toLocaleString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+
+          return (
+            `${entrada ? "📥" : "📤"} **#${t.id} • ${t.tipo.replace(/_/g, " ").toUpperCase()}**\n` +
+            `　${entrada ? "+" : "−"}${formatar(t.valor)}\n` +
+            `　📝 ${t.motivo.slice(0, 150)}\n` +
+            `　📅 ${data}`
+          );
+        }).join("\n\n")
+      : "Nenhuma movimentação registrada para este membro.";
+
+    const embed = new EmbedBuilder()
+      .setColor(0x1F4E79)
+      .setAuthor({ name: "TRIBUNAL VIRTUAL • BANCO JUDICIAL" })
+      .setTitle("🔎 EXTRATO FINANCEIRO ADMINISTRATIVO")
+      .setDescription(
+        `**Titular:** ${usuario}\n` +
+        `**ID:** \`${usuario.id}\`\n\n` +
+        `## 💰 Saldo atual\n` +
+        `# ${formatar(dados.saldo)}`
+      )
+      .addFields(
+        {
+          name: "📥 Total de entradas",
+          value: formatar(dados.totais.entradas),
+          inline: true,
+        },
+        {
+          name: "📤 Total de saídas",
+          value: formatar(dados.totais.saidas),
+          inline: true,
+        },
+        {
+          name: "📚 Últimas 10 movimentações",
+          value: historico.slice(0, 3900),
+          inline: false,
+        },
+        {
+          name: "👮 Responsável pela consulta",
+          value: `${i.user}`,
+          inline: false,
+        }
+      )
+      .setFooter({ text: "Banco Judicial • Consulta restrita à administração" })
+      .setTimestamp();
+
+    return i.reply({
+      embeds: [embed],
+      ephemeral: true,
+      allowedMentions: { parse: [] },
+    });
+  },
+
 
   async pagar(i) {
     if (!(await temCargoAutorizado(i))) {
