@@ -223,19 +223,6 @@ const comandos = [
         .setRequired(true)
     )
     .addStringOption((o) =>
-      o.setName("tipo")
-        .setDescription("Tipo de pagamento")
-        .setRequired(true)
-        .addChoices(
-          { name: "Honorários", value: "honorarios" },
-          {
-            name: "Suborno fictício (roleplay)",
-            value: "suborno_roleplay",
-          },
-          { name: "Outro", value: "outro" }
-        )
-    )
-    .addStringOption((o) =>
       o.setName("motivo")
         .setDescription("Motivo do pagamento")
         .setMaxLength(150)
@@ -380,9 +367,34 @@ const comandos = [
         .setRequired(true)
     ),
 
-  comando("auditoria", "Consultar transações recentes")
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.Administrator
+  
+  comando("auditoria", "Consultar o histórico financeiro")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addUserOption((o) =>
+      o.setName("membro")
+        .setDescription("Filtrar por membro")
+        .setRequired(false)
+    )
+    .addStringOption((o) =>
+      o.setName("tipo")
+        .setDescription("Filtrar por tipo de operação")
+        .setRequired(false)
+        .addChoices(
+          { name: "Pagamento", value: "honorarios" },
+          { name: "Outro pagamento", value: "outro" },
+          { name: "Crédito administrativo", value: "credito_administrativo" },
+          { name: "Débito administrativo", value: "debito_administrativo" },
+          { name: "Financiamento do tesouro", value: "financiamento_tesouro" },
+          { name: "Salário", value: "salario" },
+          { name: "Multa", value: "multa" },
+          { name: "Imposto", value: "imposto" }
+        )
+    )
+    .addIntegerOption((o) =>
+      o.setName("pagina")
+        .setDescription("Número da página")
+        .setMinValue(1)
+        .setRequired(false)
     ),
 ];
 
@@ -647,7 +659,6 @@ const handlers = {
 
     const usuario = i.options.getUser("membro");
     const valor = i.options.getInteger("valor");
-    const tipo = i.options.getString("tipo");
     const motivo = i.options.getString("motivo").trim();
 
     if (usuario.bot || usuario.id === i.user.id) {
@@ -679,7 +690,6 @@ const handlers = {
         i.user.id,
         usuario.id,
         valor,
-        tipo,
         motivo,
         i.user.id
       );
@@ -691,17 +701,77 @@ const handlers = {
       return responder(i, "❌ Saldo insuficiente.");
     }
 
-    await auditar(
-      `💸 PAGAMENTO | ${i.user.tag} (${i.user.id}) → ` +
-      `${usuario.tag} (${usuario.id}) | ` +
-      `${valor.toLocaleString("pt-BR")} créditos | ${tipo} | ${motivo}`
-    );
+    
+await auditar(
+  [
+    "🏦 BANCO JUDICIAL • AUDITORIA FINANCEIRA",
+    "",
+    "💸 TRANSFERÊNCIA ENTRE CONTAS",
+    "Status: CONCLUÍDA",
+    "",
+    "💰 VALOR",
+    `${valor.toLocaleString("pt-BR")} créditos`,
+    "",
+    "📤 REMETENTE",
+    `${i.user.tag} (${i.user.id})`,
+    "",
+    "📥 DESTINATÁRIO",
+    `${usuario.tag} (${usuario.id})`,
+    "",
+    "📋 CLASSIFICAÇÃO",
+    tipo,
+    "",
+    "📝 MOTIVO",
+    motivo,
+    "",
+    "🔐 RESPONSÁVEL PELA OPERAÇÃO",
+    `${i.user.tag} (${i.user.id})`
+  ].join("\n")
+);
 
-    await responder(
-      i,
-      `✅ Transferência realizada: **${valor.toLocaleString("pt-BR")} créditos** para ${usuario}.\n` +
-      `Tipo: **${tipo}** | Motivo: ${motivo}`
-    );
+
+    const embed = new EmbedBuilder()
+    .setColor(0x1F4788)
+    .setTitle("🏦 BANCO JUDICIAL")
+    .setDescription(
+    "### ✅ Transferência realizada\n" +
+    "TRIBUNAL VIRTUAL • SISTEMA FINANCEIRO\n\n" +
+    "A operação foi concluída com sucesso e registrada no sistema."
+    )
+    .addFields(
+    {
+      name: "💰 VALOR TRANSFERIDO",
+      value: `# ＋ ${valor.toLocaleString("pt-BR")} créditos`,
+      inline: false
+    },
+    {
+      name: "📤 REMETENTE",
+      value: `${i.user}`,
+      inline: true
+    },
+    {
+      name: "📥 DESTINATÁRIO",
+      value: `${usuario}`,
+      inline: true
+    },
+    {
+      name: "📝 MOTIVO DA TRANSFERÊNCIA",
+      value: motivo,
+      inline: false
+    }
+  )
+  .setFooter({
+    text: "Banco Judicial • Comprovante eletrônico"
+  })
+  .setTimestamp();
+
+await i.reply({
+  embeds: [embed],
+  allowedMentions: {
+    parse: [],
+    users: [i.user.id, usuario.id]
+  }
+});
   },
 
   async creditar(i) {
@@ -737,38 +807,39 @@ const handlers = {
       );
     });
 
-    const registro = new EmbedBuilder()
-      .setColor(0x1F4788)
-      .setTitle("🏛️ REGISTRO DE CRÉDITO ADMINISTRATIVO")
-      .setDescription(
-        "Uma operação de crédito foi registrada no sistema financeiro do Tribunal Virtual."
-      )
-      .addFields(
-        {
-          name: "👮 Autoridade responsável",
-          value: `${i.user}`,
-          inline: true,
-        },
-        {
-          name: "👤 Beneficiário",
-          value: `${usuario}`,
-          inline: true,
-        },
-        {
-          name: "💰 Valor creditado",
-          value: `**${valor.toLocaleString("pt-BR")} créditos**`,
-          inline: false,
-        },
-        {
-          name: "📝 Justificativa",
-          value: motivo.slice(0, 1024),
-          inline: false,
-        }
-      )
-      .setFooter({
-        text: "Banco Judicial • Registro de Auditoria",
-      })
-      .setTimestamp();
+
+const registro = new EmbedBuilder()
+  .setColor(0x1F4788)
+  .setTitle("🏦 REGISTRO DE TRANSFERÊNCIA FINANCEIRA")
+  .setDescription(
+    "Uma transferência entre membros foi concluída e registrada no sistema financeiro do Tribunal Virtual."
+  )
+  .addFields(
+      {
+        name: "📤 Remetente",
+        value: `${i.user}`,
+        inline: true,
+      },
+      {
+       name: "📥 Destinatário",
+       value: `${usuario}`,
+       inline: true,
+      },
+     {
+        name: "💰 Valor transferido",
+        value: `**${valor.toLocaleString("pt-BR")} créditos**`,
+        inline: false,
+      },
+      {
+       name: "📝 Motivo da transferência",
+      value: motivo.slice(0, 1024),
+      inline: false,
+      }
+    )
+    .setFooter({
+     text: "Banco Judicial • Registro de Auditoria",
+    })
+    .setTimestamp();
 
     await auditar({ embeds: [registro] });
 
@@ -983,26 +1054,105 @@ const handlers = {
     await cobrar(i, "imposto");
   },
 
+  
   async auditoria(i) {
     if (!ehAdmin(i)) {
-      return responder(i, "Sem permissão.");
+      return responder(i, "❌ Apenas administradores podem acessar a auditoria.");
+    }
+
+    const membro = i.options.getUser("membro");
+    const tipo = i.options.getString("tipo");
+    const pagina = i.options.getInteger("pagina") ?? 1;
+
+    const filtros = [];
+    const parametros = [];
+
+    if (membro) {
+      filtros.push("(origem = ? OR destino = ?)");
+      parametros.push(membro.id, membro.id);
+    }
+
+    if (tipo) {
+      filtros.push("tipo = ?");
+      parametros.push(tipo);
+    }
+
+    const where = filtros.length
+      ? `WHERE ${filtros.join(" AND ")}`
+      : "";
+
+    const total = db.prepare(`
+      SELECT COUNT(*) AS quantidade
+      FROM transacoes
+      ${where}
+    `).get(...parametros).quantidade;
+
+    const totalPaginas = Math.max(1, Math.ceil(total / 10));
+
+    if (pagina > totalPaginas) {
+      return responder(i, `❌ Página inválida. Existem ${totalPaginas} páginas.`);
     }
 
     const linhas = db.prepare(`
-      SELECT * FROM transacoes ORDER BY id DESC LIMIT 10
-    `).all();
+      SELECT * FROM transacoes
+      ${where}
+      ORDER BY id DESC
+      LIMIT ? OFFSET ?
+    `).all(...parametros, 10, (pagina - 1) * 10);
 
-    if (!linhas.length) {
-      return responder(i, "Ainda não há transações.");
-    }
+    const formatar = (valor) =>
+      `${valor.toLocaleString("pt-BR")} créditos`;
 
-    const texto = linhas.map((t) =>
-      `#${t.id} | ${t.tipo} | ${t.valor.toLocaleString("pt-BR")} créditos | ` +
-      `${t.origem ?? "Sistema"} → ${t.destino ?? "Sistema"} | ` +
-      `${t.motivo} | Operador: ${t.operador ?? "Sistema"}`
-    ).join("\n");
+    const nomeConta = (id) => {
+      if (!id) return "Sistema";
+      if (id === TESOURO) return "Tesouro Judicial";
+      return `<@${id}>`;
+    };
 
-    await responder(i, texto);
+    const registros = linhas.map((t) => {
+      const data = new Date(t.data).toLocaleString("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      return [
+        `**#${t.id} — ${t.tipo.replace(/_/g, " ").toUpperCase()}**`,
+        `💰 **Valor:** ${formatar(t.valor)}`,
+        `📤 **Origem:** ${nomeConta(t.origem)}`,
+        `📥 **Destino:** ${nomeConta(t.destino)}`,
+        `👮 **Responsável:** ${nomeConta(t.operador)}`,
+        `📝 **Motivo:** ${(t.motivo || "Não informado").slice(0, 120)}`,
+        `🕒 ${data}`,
+      ].join("\n");
+    });
+
+    const embed = new EmbedBuilder()
+      .setColor(0x1F4E79)
+      .setAuthor({ name: "TRIBUNAL VIRTUAL • BANCO JUDICIAL" })
+      .setTitle("📋 AUDITORIA FINANCEIRA")
+      .setDescription(
+        `**Registros encontrados:** ${total}\n` +
+        `**Filtro de membro:** ${membro ?? "Todos"}\n` +
+        `**Tipo:** ${tipo ? tipo.replace(/_/g, " ") : "Todos"}`
+      )
+      .addFields({
+        name: `📑 Movimentações — Página ${pagina}/${totalPaginas}`,
+        value: registros.length
+          ? registros.join("\n\n━━━━━━━━━━━━━━\n\n").slice(0, 3900)
+          : "Nenhuma movimentação encontrada.",
+      })
+      .setFooter({ text: "Banco Judicial • Acesso administrativo" })
+      .setTimestamp();
+
+    return i.reply({
+      embeds: [embed],
+      ephemeral: true,
+      allowedMentions: { parse: [] },
+    });
   },
 };
 
