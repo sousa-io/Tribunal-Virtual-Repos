@@ -477,6 +477,33 @@ const comandos = [
         .setMinValue(1)
         .setRequired(false)
     ),
+
+    
+  comando("aviso", "Publicar um aviso oficial")
+    .setDefaultMemberPermissions(
+      PermissionFlagsBits.Administrator
+    )
+    .addChannelOption((o) =>
+      o
+        .setName("canal")
+        .setDescription("Canal em que o aviso será publicado")
+        .addChannelTypes(0)
+        .setRequired(true)
+    )
+    .addStringOption((o) =>
+      o
+        .setName("titulo")
+        .setDescription("Título do aviso")
+        .setMaxLength(200)
+        .setRequired(true)
+    )
+    .addStringOption((o) =>
+      o
+        .setName("mensagem")
+        .setDescription("Conteúdo do aviso")
+        .setMaxLength(3500)
+        .setRequired(true)
+    ),
 ];
 
 // ==================================================
@@ -1373,6 +1400,107 @@ const handlers = {
       ephemeral: true,
       allowedMentions: { parse: [] },
     });
+  },
+  
+  async aviso(i) {
+    if (!ehAdmin(i)) {
+      return responder(i, "❌ Apenas administradores podem publicar avisos.");
+    }
+
+    const canal = i.options.getChannel("canal");
+    const titulo = i.options.getString("titulo").trim();
+    const mensagem = i.options.getString("mensagem").trim();
+
+    if (!canal || !canal.isTextBased() || !canal.send) {
+      return responder(i, "❌ Selecione um canal de texto válido.");
+    }
+
+    if (!titulo || !mensagem) {
+      return responder(i, "❌ Preencha o título e a mensagem.");
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor(0x1F4E79)
+      .setAuthor({
+        name: "TRIBUNAL VIRTUAL • COMUNICADO OFICIAL",
+      })
+      .setTitle(`📢 ${titulo}`)
+      .setDescription(mensagem)
+      .addFields({
+        name: "🏛️ Instituição",
+        value: "Tribunal Virtual",
+        inline: true,
+      })
+      .setFooter({
+        text: `Publicado por ${i.user.tag}`,
+      })
+      .setTimestamp();
+
+    try {
+      await canal.send({
+        embeds: [embed],
+        allowedMentions: { parse: [] },
+      });
+
+      
+      await auditar({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x1F4E79)
+            .setTitle("📋 Registro de Publicação de Aviso")
+            .setDescription(
+              "Um comunicado oficial foi publicado pelo sistema."
+            )
+            .addFields(
+              {
+                name: "👤 Responsável",
+                value: `${i.user} (\`${i.user.tag}\`)`,
+                inline: true,
+              },
+              {
+                name: "🆔 ID do responsável",
+                value: `\`${i.user.id}\``,
+                inline: true,
+              },
+              {
+                name: "📢 Canal de destino",
+                value: `${canal}`,
+                inline: true,
+              },
+              {
+                name: "📝 Título do aviso",
+                value: titulo,
+                inline: false,
+              },
+              {
+                name: "📄 Conteúdo publicado",
+                value:
+                  mensagem.length > 1000
+                    ? `${mensagem.slice(0, 1000)}...`
+                    : mensagem,
+                inline: false,
+              }
+            )
+            .setFooter({
+              text: "Tribunal Virtual • Sistema de Auditoria",
+            })
+            .setTimestamp(),
+        ],
+      });
+
+
+      return responder(
+        i,
+        `✅ Aviso publicado com sucesso em ${canal}.`
+      );
+    } catch (erro) {
+      console.error("Erro ao publicar aviso:", erro);
+
+      return responder(
+        i,
+        "❌ Não consegui publicar o aviso. Verifique as permissões do bot no canal."
+      );
+    }
   },
 };
 
