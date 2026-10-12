@@ -186,6 +186,14 @@ const comandos = [
   .setDefaultMemberPermissions(
     PermissionFlagsBits.Administrator
   ),
+
+  comando("consultar_saldo", "Consultar o saldo de qualquer membro")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addUserOption((o) =>
+      o.setName("membro")
+        .setDescription("Membro que terá o saldo consultado")
+        .setRequired(true)
+    ),
   
   comando("saldo", "Consultar sua carteira"),
 
@@ -369,6 +377,41 @@ const comandos = [
 ];
 
 const handlers = {
+
+    async consultar_saldo(i) {
+    if (!ehAdmin(i)) {
+      return responder(i, "❌ Apenas administradores podem consultar saldos.");
+    }
+
+    const usuario = i.options.getUser("membro");
+
+    if (usuario.bot) {
+      return responder(i, "❌ Selecione um membro válido, não um bot.");
+    }
+
+    const saldo = transacao(() => {
+      garantirConta(usuario.id);
+      return saldoDe(usuario.id);
+    });
+
+    const embed = new EmbedBuilder()
+      .setColor(0x1F4E79)
+      .setTitle("🏛️ CONSULTA DE SALDO")
+      .setDescription(
+        `**Titular:** ${usuario}\n` +
+        `**ID:** \`${usuario.id}\`\n\n` +
+        `### 💰 Saldo atual\n` +
+        `**${saldo.toLocaleString("pt-BR")} créditos**`
+      )
+      .setFooter({ text: "Banco Judicial • Consulta administrativa" })
+      .setTimestamp();
+
+    return i.reply({
+      embeds: [embed],
+      ephemeral: true,
+      allowedMentions: { parse: [] },
+    });
+  },
 
   async saldo_tesouro(i) {
   if (!ehAdmin(i)) {
