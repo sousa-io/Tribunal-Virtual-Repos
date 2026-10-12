@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const {
@@ -6,8 +5,6 @@ const {
   GatewayIntentBits,
   SlashCommandBuilder,
   PermissionFlagsBits,
-  REST,
-  Routes,
   EmbedBuilder,
 } = require("discord.js");
 
@@ -58,6 +55,10 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
+// ==================================================
+// FUNÇÕES DO BANCO
+// ==================================================
+
 function saldoDe(id) {
   return db.prepare(
     "SELECT saldo FROM contas WHERE usuario_id = ?"
@@ -105,7 +106,10 @@ function transacao(callback) {
   return db.transaction(callback)();
 }
 
-// Aceita tanto mensagens de texto quanto Embeds.
+// ==================================================
+// AUDITORIA E PERMISSÕES
+// ==================================================
+
 async function auditar(mensagem) {
   if (!AUDIT_CHANNEL_ID) {
     console.error(
@@ -124,9 +128,10 @@ async function auditar(mensagem) {
       return;
     }
 
-    const conteudo = typeof mensagem === "string"
-      ? { content: mensagem }
-      : mensagem;
+    const conteudo =
+      typeof mensagem === "string"
+        ? { content: mensagem }
+        : mensagem;
 
     await canal.send({
       ...conteudo,
@@ -155,9 +160,11 @@ async function temCargoAutorizado(interaction) {
 }
 
 function ehAdmin(interaction) {
-  return interaction.memberPermissions?.has(
-    PermissionFlagsBits.Administrator
-  ) ?? false;
+  return (
+    interaction.memberPermissions?.has(
+      PermissionFlagsBits.Administrator
+    ) ?? false
+  );
 }
 
 async function responder(interaction, texto) {
@@ -165,12 +172,14 @@ async function responder(interaction, texto) {
     return interaction.followUp({
       content: texto,
       ephemeral: true,
+      allowedMentions: { parse: [] },
     });
   }
 
   return interaction.reply({
     content: texto,
     ephemeral: true,
+    allowedMentions: { parse: [] },
   });
 }
 
@@ -180,50 +189,86 @@ function comando(nome, descricao) {
     .setDescription(descricao);
 }
 
-const comandos = [
+function formatarCreditos(valor) {
+  return `${(valor || 0).toLocaleString("pt-BR")} créditos`;
+}
 
-  comando("saldo_tesouro", "Consultar o saldo do Tesouro Judicial")
-  .setDefaultMemberPermissions(
+function formatarData(data) {
+  return new Date(data).toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// ==================================================
+// DEFINIÇÃO DOS COMANDOS
+// ==================================================
+
+const comandos = [
+  comando(
+    "saldo_tesouro",
+    "Consultar o saldo do Tesouro Judicial"
+  ).setDefaultMemberPermissions(
     PermissionFlagsBits.Administrator
   ),
 
-  comando("consultar_saldo", "Consultar o saldo de qualquer membro")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  comando(
+    "consultar_saldo",
+    "Consultar o saldo de qualquer membro"
+  )
+    .setDefaultMemberPermissions(
+      PermissionFlagsBits.Administrator
+    )
     .addUserOption((o) =>
-      o.setName("membro")
+      o
+        .setName("membro")
         .setDescription("Membro que terá o saldo consultado")
         .setRequired(true)
     ),
-  
+
   comando("saldo", "Consultar sua carteira"),
 
   comando("extrato", "Ver suas últimas movimentações"),
 
-  
-  comando("consultar_extrato", "Consultar o extrato de um membro")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  comando(
+    "consultar_extrato",
+    "Consultar o extrato de um membro"
+  )
+    .setDefaultMemberPermissions(
+      PermissionFlagsBits.Administrator
+    )
     .addUserOption((o) =>
-      o.setName("membro")
+      o
+        .setName("membro")
         .setDescription("Membro cujo extrato será consultado")
         .setRequired(true)
     ),
 
-
-  comando("pagar", "Transferir créditos para um membro")
+  comando(
+    "pagar",
+    "Transferir créditos para um membro"
+  )
     .addUserOption((o) =>
-      o.setName("membro")
+      o
+        .setName("membro")
         .setDescription("Destinatário")
         .setRequired(true)
     )
     .addIntegerOption((o) =>
-      o.setName("valor")
+      o
+        .setName("valor")
         .setDescription("Valor em créditos")
         .setMinValue(1)
         .setMaxValue(LIMITE)
         .setRequired(true)
     )
     .addStringOption((o) =>
-      o.setName("motivo")
+      o
+        .setName("motivo")
         .setDescription("Motivo do pagamento")
         .setMaxLength(150)
         .setRequired(true)
@@ -234,48 +279,55 @@ const comandos = [
       PermissionFlagsBits.Administrator
     )
     .addUserOption((o) =>
-      o.setName("membro")
+      o
+        .setName("membro")
         .setDescription("Destinatário")
         .setRequired(true)
     )
     .addIntegerOption((o) =>
-      o.setName("valor")
+      o
+        .setName("valor")
         .setDescription("Valor")
         .setMinValue(1)
         .setMaxValue(LIMITE)
         .setRequired(true)
     )
     .addStringOption((o) =>
-      o.setName("motivo")
+      o
+        .setName("motivo")
         .setDescription("Justificativa")
         .setMaxLength(150)
         .setRequired(true)
     ),
 
-    
-  comando("debitar", "Retirar créditos de um membro e enviar ao tesouro")
+  comando(
+    "debitar",
+    "Retirar créditos de um membro e enviar ao tesouro"
+  )
     .setDefaultMemberPermissions(
       PermissionFlagsBits.Administrator
     )
     .addUserOption((o) =>
-      o.setName("membro")
+      o
+        .setName("membro")
         .setDescription("Membro que será debitado")
         .setRequired(true)
     )
     .addIntegerOption((o) =>
-      o.setName("valor")
+      o
+        .setName("valor")
         .setDescription("Valor a retirar")
         .setMinValue(1)
         .setMaxValue(LIMITE)
         .setRequired(true)
     )
     .addStringOption((o) =>
-      o.setName("motivo")
+      o
+        .setName("motivo")
         .setDescription("Justificativa da retirada")
         .setMaxLength(150)
         .setRequired(true)
     ),
-
 
   comando(
     "financiar_tesouro",
@@ -285,14 +337,16 @@ const comandos = [
       PermissionFlagsBits.Administrator
     )
     .addIntegerOption((o) =>
-      o.setName("valor")
+      o
+        .setName("valor")
         .setDescription("Valor")
         .setMinValue(1)
         .setMaxValue(LIMITE)
         .setRequired(true)
     )
     .addStringOption((o) =>
-      o.setName("motivo")
+      o
+        .setName("motivo")
         .setDescription("Justificativa")
         .setMaxLength(150)
         .setRequired(true)
@@ -303,19 +357,22 @@ const comandos = [
       PermissionFlagsBits.Administrator
     )
     .addUserOption((o) =>
-      o.setName("membro")
+      o
+        .setName("membro")
         .setDescription("Funcionário")
         .setRequired(true)
     )
     .addIntegerOption((o) =>
-      o.setName("valor")
+      o
+        .setName("valor")
         .setDescription("Salário")
         .setMinValue(1)
         .setMaxValue(LIMITE)
         .setRequired(true)
     )
     .addStringOption((o) =>
-      o.setName("motivo")
+      o
+        .setName("motivo")
         .setDescription("Cargo e período")
         .setMaxLength(150)
         .setRequired(true)
@@ -326,19 +383,22 @@ const comandos = [
       PermissionFlagsBits.Administrator
     )
     .addUserOption((o) =>
-      o.setName("membro")
+      o
+        .setName("membro")
         .setDescription("Pessoa multada")
         .setRequired(true)
     )
     .addIntegerOption((o) =>
-      o.setName("valor")
+      o
+        .setName("valor")
         .setDescription("Valor da multa")
         .setMinValue(1)
         .setMaxValue(LIMITE)
         .setRequired(true)
     )
     .addStringOption((o) =>
-      o.setName("motivo")
+      o
+        .setName("motivo")
         .setDescription("Fundamento da multa no roleplay")
         .setMaxLength(150)
         .setRequired(true)
@@ -349,66 +409,96 @@ const comandos = [
       PermissionFlagsBits.Administrator
     )
     .addUserOption((o) =>
-      o.setName("membro")
+      o
+        .setName("membro")
         .setDescription("Contribuinte")
         .setRequired(true)
     )
     .addIntegerOption((o) =>
-      o.setName("valor")
+      o
+        .setName("valor")
         .setDescription("Valor do imposto")
         .setMinValue(1)
         .setMaxValue(LIMITE)
         .setRequired(true)
     )
     .addStringOption((o) =>
-      o.setName("motivo")
+      o
+        .setName("motivo")
         .setDescription("Motivo da cobrança")
         .setMaxLength(150)
         .setRequired(true)
     ),
 
-  
-  comando("auditoria", "Consultar o histórico financeiro")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  comando(
+    "auditoria",
+    "Consultar o histórico financeiro"
+  )
+    .setDefaultMemberPermissions(
+      PermissionFlagsBits.Administrator
+    )
     .addUserOption((o) =>
-      o.setName("membro")
+      o
+        .setName("membro")
         .setDescription("Filtrar por membro")
         .setRequired(false)
     )
     .addStringOption((o) =>
-      o.setName("tipo")
+      o
+        .setName("tipo")
         .setDescription("Filtrar por tipo de operação")
         .setRequired(false)
         .addChoices(
-          { name: "Pagamento", value: "honorarios" },
+          { name: "Transferência", value: "transferencia" },
+          { name: "Pagamento antigo", value: "honorarios" },
           { name: "Outro pagamento", value: "outro" },
-          { name: "Crédito administrativo", value: "credito_administrativo" },
-          { name: "Débito administrativo", value: "debito_administrativo" },
-          { name: "Financiamento do tesouro", value: "financiamento_tesouro" },
+          {
+            name: "Crédito administrativo",
+            value: "credito_administrativo",
+          },
+          {
+            name: "Débito administrativo",
+            value: "debito_administrativo",
+          },
+          {
+            name: "Financiamento do tesouro",
+            value: "financiamento_tesouro",
+          },
+          { name: "Saldo inicial", value: "saldo_inicial" },
           { name: "Salário", value: "salario" },
           { name: "Multa", value: "multa" },
           { name: "Imposto", value: "imposto" }
         )
     )
     .addIntegerOption((o) =>
-      o.setName("pagina")
+      o
+        .setName("pagina")
         .setDescription("Número da página")
         .setMinValue(1)
         .setRequired(false)
     ),
 ];
 
-const handlers = {
+// ==================================================
+// MANIPULADORES DOS COMANDOS
+// ==================================================
 
-    async consultar_saldo(i) {
+const handlers = {
+  async consultar_saldo(i) {
     if (!ehAdmin(i)) {
-      return responder(i, "❌ Apenas administradores podem consultar saldos.");
+      return responder(
+        i,
+        "❌ Apenas administradores podem consultar saldos."
+      );
     }
 
     const usuario = i.options.getUser("membro");
 
     if (usuario.bot) {
-      return responder(i, "❌ Selecione um membro válido, não um bot.");
+      return responder(
+        i,
+        "❌ Selecione um membro válido, não um bot."
+      );
     }
 
     const saldo = transacao(() => {
@@ -423,9 +513,11 @@ const handlers = {
         `**Titular:** ${usuario}\n` +
         `**ID:** \`${usuario.id}\`\n\n` +
         `### 💰 Saldo atual\n` +
-        `**${saldo.toLocaleString("pt-BR")} créditos**`
+        `**${formatarCreditos(saldo)}**`
       )
-      .setFooter({ text: "Banco Judicial • Consulta administrativa" })
+      .setFooter({
+        text: "Banco Judicial • Consulta administrativa",
+      })
       .setTimestamp();
 
     return i.reply({
@@ -436,19 +528,19 @@ const handlers = {
   },
 
   async saldo_tesouro(i) {
-  if (!ehAdmin(i)) {
-    return responder(i, "Sem permissão.");
-  }
+    if (!ehAdmin(i)) {
+      return responder(i, "❌ Sem permissão.");
+    }
 
-  const saldo = transacao(() => {
-    garantirConta(TESOURO);
-    return saldoDe(TESOURO);
-  });
+    const saldo = transacao(() => {
+      garantirConta(TESOURO);
+      return saldoDe(TESOURO);
+    });
 
-  await responder(
-    i,
-    `🏛️ Saldo do Tesouro Judicial: **${saldo.toLocaleString("pt-BR")} créditos**.`
-  );
+    return responder(
+      i,
+      `🏛️ Saldo do Tesouro Judicial: **${formatarCreditos(saldo)}**.`
+    );
   },
 
   async saldo(i) {
@@ -457,58 +549,57 @@ const handlers = {
       return saldoDe(i.user.id);
     });
 
-    await responder(
+    return responder(
       i,
-      `💰 Seu saldo: **${valor.toLocaleString("pt-BR")} créditos**.`
+      `💰 Seu saldo: **${formatarCreditos(valor)}**.`
     );
   },
 
-    async extrato(i) {
+  async extrato(i) {
     const dados = transacao(() => {
       garantirConta(i.user.id);
 
       const saldo = saldoDe(i.user.id);
 
       const linhas = db.prepare(`
-        SELECT * FROM transacoes
+        SELECT *
+        FROM transacoes
         WHERE origem = ? OR destino = ?
-        ORDER BY id DESC LIMIT 10
+        ORDER BY id DESC
+        LIMIT 10
       `).all(i.user.id, i.user.id);
 
       const totais = db.prepare(`
         SELECT
-          SUM(CASE WHEN destino = ? THEN valor ELSE 0 END) AS entradas,
-          SUM(CASE WHEN origem = ? THEN valor ELSE 0 END) AS saidas
+          COALESCE(
+            SUM(CASE WHEN destino = ? THEN valor ELSE 0 END), 0
+          ) AS entradas,
+          COALESCE(
+            SUM(CASE WHEN origem = ? THEN valor ELSE 0 END), 0
+          ) AS saidas
         FROM transacoes
         WHERE origem = ? OR destino = ?
-      `).get(i.user.id, i.user.id, i.user.id, i.user.id);
+      `).get(
+        i.user.id,
+        i.user.id,
+        i.user.id,
+        i.user.id
+      );
 
       return { saldo, linhas, totais };
     });
-
-    const formatar = (valor) =>
-      `${(valor || 0).toLocaleString("pt-BR")} créditos`;
 
     const historico = dados.linhas.length
       ? dados.linhas.map((t) => {
           const entrada = t.destino === i.user.id;
           const sinal = entrada ? "+" : "−";
-          const cor = entrada ? "📥" : "📤";
-          const valor = formatar(t.valor);
-          const data = new Date(t.data).toLocaleString("pt-BR", {
-            timeZone: "America/Sao_Paulo",
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
+          const icone = entrada ? "📥" : "📤";
 
           return (
-            `${cor} **#${t.id} — ${t.tipo.replace(/_/g, " ").toUpperCase()}**\n` +
-            `　${sinal}${valor}\n` +
-            `　📝 ${t.motivo.slice(0, 200)}\n` +
-            `　📅 ${data}`
+            `${icone} **#${t.id} — ${t.tipo.replace(/_/g, " ").toUpperCase()}**\n` +
+            `　${sinal}${formatarCreditos(t.valor)}\n` +
+            `　📝 ${(t.motivo || "Não informado").slice(0, 120)}\n` +
+            `　📅 ${formatarData(t.data)}`
           );
         }).join("\n\n")
       : "Nenhuma movimentação registrada.";
@@ -523,122 +614,28 @@ const handlers = {
         `**Titular:** ${i.user}\n` +
         `**Identificação:** \`${i.user.id}\`\n\n` +
         `## 💰 Saldo disponível\n` +
-        `# ${formatar(dados.saldo)}`
+        `# ${formatarCreditos(dados.saldo)}`
       )
       .addFields(
         {
           name: "📥 Total de entradas",
-          value: formatar(dados.totais.entradas),
+          value: formatarCreditos(dados.totais.entradas),
           inline: true,
         },
         {
           name: "📤 Total de saídas",
-          value: formatar(dados.totais.saidas),
+          value: formatarCreditos(dados.totais.saidas),
           inline: true,
         },
         {
           name: "📚 Histórico recente",
-          value: historico.slice(0, 3900),
+          value: historico.slice(0, 1024),
           inline: false,
         }
       )
       .setFooter({
         text: "Documento financeiro • Banco Judicial",
       })
-      .setTimestamp();
-
-    await i.reply({
-      embeds: [embed],
-      ephemeral: true,
-      allowedMentions: { parse: [] },
-    });
-  },
-
-  
-  async consultar_extrato(i) {
-    if (!ehAdmin(i)) {
-      return responder(i, "❌ Apenas administradores podem consultar extratos.");
-    }
-
-    const usuario = i.options.getUser("membro");
-
-    if (usuario.bot) {
-      return responder(i, "❌ Selecione um membro, não um bot.");
-    }
-
-    const dados = {
-      saldo: saldoDe(usuario.id) ?? 0,
-      linhas: db.prepare(`
-        SELECT * FROM transacoes
-        WHERE origem = ? OR destino = ?
-        ORDER BY id DESC LIMIT 10
-      `).all(usuario.id, usuario.id),
-      totais: db.prepare(`
-        SELECT
-          COALESCE(SUM(CASE WHEN destino = ? THEN valor ELSE 0 END), 0) AS entradas,
-          COALESCE(SUM(CASE WHEN origem = ? THEN valor ELSE 0 END), 0) AS saidas
-        FROM transacoes
-        WHERE origem = ? OR destino = ?
-      `).get(usuario.id, usuario.id, usuario.id, usuario.id),
-    };
-
-    const formatar = (valor) =>
-      `${(valor || 0).toLocaleString("pt-BR")} créditos`;
-
-    const historico = dados.linhas.length
-      ? dados.linhas.map((t) => {
-          const entrada = t.destino === usuario.id;
-          const data = new Date(t.data).toLocaleString("pt-BR", {
-            timeZone: "America/Sao_Paulo",
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-
-          return (
-            `${entrada ? "📥" : "📤"} **#${t.id} • ${t.tipo.replace(/_/g, " ").toUpperCase()}**\n` +
-            `　${entrada ? "+" : "−"}${formatar(t.valor)}\n` +
-            `　📝 ${t.motivo.slice(0, 150)}\n` +
-            `　📅 ${data}`
-          );
-        }).join("\n\n")
-      : "Nenhuma movimentação registrada para este membro.";
-
-    const embed = new EmbedBuilder()
-      .setColor(0x1F4E79)
-      .setAuthor({ name: "TRIBUNAL VIRTUAL • BANCO JUDICIAL" })
-      .setTitle("🔎 EXTRATO FINANCEIRO ADMINISTRATIVO")
-      .setDescription(
-        `**Titular:** ${usuario}\n` +
-        `**ID:** \`${usuario.id}\`\n\n` +
-        `## 💰 Saldo atual\n` +
-        `# ${formatar(dados.saldo)}`
-      )
-      .addFields(
-        {
-          name: "📥 Total de entradas",
-          value: formatar(dados.totais.entradas),
-          inline: true,
-        },
-        {
-          name: "📤 Total de saídas",
-          value: formatar(dados.totais.saidas),
-          inline: true,
-        },
-        {
-          name: "📚 Últimas 10 movimentações",
-          value: historico.slice(0, 3900),
-          inline: false,
-        },
-        {
-          name: "👮 Responsável pela consulta",
-          value: `${i.user}`,
-          inline: false,
-        }
-      )
-      .setFooter({ text: "Banco Judicial • Consulta restrita à administração" })
       .setTimestamp();
 
     return i.reply({
@@ -648,6 +645,116 @@ const handlers = {
     });
   },
 
+  async consultar_extrato(i) {
+    if (!ehAdmin(i)) {
+      return responder(
+        i,
+        "❌ Apenas administradores podem consultar extratos."
+      );
+    }
+
+    const usuario = i.options.getUser("membro");
+
+    if (usuario.bot) {
+      return responder(
+        i,
+        "❌ Selecione um membro, não um bot."
+      );
+    }
+
+    const dados = {
+      saldo: saldoDe(usuario.id) ?? 0,
+
+      linhas: db.prepare(`
+        SELECT *
+        FROM transacoes
+        WHERE origem = ? OR destino = ?
+        ORDER BY id DESC
+        LIMIT 10
+      `).all(usuario.id, usuario.id),
+
+      totais: db.prepare(`
+        SELECT
+          COALESCE(
+            SUM(CASE WHEN destino = ? THEN valor ELSE 0 END), 0
+          ) AS entradas,
+          COALESCE(
+            SUM(CASE WHEN origem = ? THEN valor ELSE 0 END), 0
+          ) AS saidas
+        FROM transacoes
+        WHERE origem = ? OR destino = ?
+      `).get(
+        usuario.id,
+        usuario.id,
+        usuario.id,
+        usuario.id
+      ),
+    };
+
+    const historico = dados.linhas.length
+      ? dados.linhas.map((t) => {
+          const entrada = t.destino === usuario.id;
+          const icone = entrada ? "📥" : "📤";
+          const sinal = entrada ? "+" : "−";
+
+          return (
+            `${icone} **#${t.id} • ${t.tipo.replace(/_/g, " ").toUpperCase()}**\n` +
+            `　${sinal}${formatarCreditos(t.valor)}\n` +
+            `　📝 ${(t.motivo || "Não informado").slice(0, 120)}\n` +
+            `　📅 ${formatarData(t.data)}`
+          );
+        }).join("\n\n")
+      : "Nenhuma movimentação registrada para este membro.";
+
+    const embed = new EmbedBuilder()
+      .setColor(0x1F4E79)
+      .setAuthor({
+        name: "TRIBUNAL VIRTUAL • BANCO JUDICIAL",
+      })
+      .setTitle("🔎 EXTRATO FINANCEIRO ADMINISTRATIVO")
+      .setDescription(
+        `**Titular:** ${usuario}\n` +
+        `**ID:** \`${usuario.id}\`\n\n` +
+        `## 💰 Saldo atual\n` +
+        `# ${formatarCreditos(dados.saldo)}`
+      )
+      .addFields(
+        {
+          name: "📥 Total de entradas",
+          value: formatarCreditos(dados.totais.entradas),
+          inline: true,
+        },
+        {
+          name: "📤 Total de saídas",
+          value: formatarCreditos(dados.totais.saidas),
+          inline: true,
+        },
+        {
+          name: "📚 Últimas movimentações",
+          value: historico.slice(0, 1024),
+          inline: false,
+        },
+        {
+          name: "👮 Responsável pela consulta",
+          value: `${i.user}`,
+          inline: false,
+        }
+      )
+      .setFooter({
+        text: "Banco Judicial • Consulta restrita à administração",
+      })
+      .setTimestamp();
+
+    return i.reply({
+      embeds: [embed],
+      ephemeral: true,
+      allowedMentions: { parse: [] },
+    });
+  },
+
+  // ==================================================
+  // PAGAR — TRANSFERÊNCIA ENTRE MEMBROS
+  // ==================================================
 
   async pagar(i) {
     if (!(await temCargoAutorizado(i))) {
@@ -661,35 +768,48 @@ const handlers = {
     const valor = i.options.getInteger("valor");
     const motivo = i.options.getString("motivo").trim();
 
-    if (usuario.bot || usuario.id === i.user.id) {
+    if (!usuario || usuario.bot || usuario.id === i.user.id) {
       return responder(
         i,
-        "❌ Escolha outro membro que não seja um bot."
+        "❌ Escolha outro membro que não seja um bot ou você mesmo."
       );
     }
 
+    if (!Number.isInteger(valor) || valor < 1 || valor > LIMITE) {
+      return responder(i, "❌ Informe um valor válido.");
+    }
+
     if (!motivo) {
-      return responder(i, "Informe um motivo válido.");
+      return responder(i, "❌ Informe um motivo válido.");
     }
 
     const resultado = transacao(() => {
       garantirConta(i.user.id);
       garantirConta(usuario.id);
 
-      if (saldoDe(i.user.id) < valor) return false;
+      const saldoRemetente = saldoDe(i.user.id);
 
-      db.prepare(
-        "UPDATE contas SET saldo = saldo - ? WHERE usuario_id = ?"
-      ).run(valor, i.user.id);
+      if (saldoRemetente < valor) {
+        return false;
+      }
 
-      db.prepare(
-        "UPDATE contas SET saldo = saldo + ? WHERE usuario_id = ?"
-      ).run(valor, usuario.id);
+      db.prepare(`
+        UPDATE contas
+        SET saldo = saldo - ?
+        WHERE usuario_id = ?
+      `).run(valor, i.user.id);
+
+      db.prepare(`
+        UPDATE contas
+        SET saldo = saldo + ?
+        WHERE usuario_id = ?
+      `).run(valor, usuario.id);
 
       registrar(
         i.user.id,
         usuario.id,
         valor,
+        "transferencia",
         motivo,
         i.user.id
       );
@@ -701,101 +821,122 @@ const handlers = {
       return responder(i, "❌ Saldo insuficiente.");
     }
 
-    
-await auditar(
-  [
-    "🏦 BANCO JUDICIAL • AUDITORIA FINANCEIRA",
-    "",
-    "💸 TRANSFERÊNCIA ENTRE CONTAS",
-    "Status: CONCLUÍDA",
-    "",
-    "💰 VALOR",
-    `${valor.toLocaleString("pt-BR")} créditos`,
-    "",
-    "📤 REMETENTE",
-    `${i.user.tag} (${i.user.id})`,
-    "",
-    "📥 DESTINATÁRIO",
-    `${usuario.tag} (${usuario.id})`,
-    "",
-    "📋 CLASSIFICAÇÃO",
-    tipo,
-    "",
-    "📝 MOTIVO",
-    motivo,
-    "",
-    "🔐 RESPONSÁVEL PELA OPERAÇÃO",
-    `${i.user.tag} (${i.user.id})`
-  ].join("\n")
-);
+    // Registro interno enviado ao canal de auditoria.
+    const registro = new EmbedBuilder()
+      .setColor(0x1F4E79)
+      .setTitle("🏦 REGISTRO DE TRANSFERÊNCIA FINANCEIRA")
+      .setDescription(
+        "Uma transferência entre membros foi concluída e registrada no sistema financeiro do Tribunal Virtual."
+      )
+      .addFields(
+        {
+          name: "📤 Remetente",
+          value: `${i.user.tag}\nID: \`${i.user.id}\``,
+          inline: true,
+        },
+        {
+          name: "📥 Destinatário",
+          value: `${usuario.tag}\nID: \`${usuario.id}\``,
+          inline: true,
+        },
+        {
+          name: "💰 Valor transferido",
+          value: `**${formatarCreditos(valor)}**`,
+          inline: false,
+        },
+        {
+          name: "📝 Motivo",
+          value: motivo.slice(0, 1024),
+          inline: false,
+        },
+        {
+          name: "🔐 Responsável pela operação",
+          value: `${i.user.tag} (\`${i.user.id}\`)`,
+          inline: false,
+        },
+        {
+          name: "📋 Classificação",
+          value: "Transferência entre contas",
+          inline: false,
+        }
+      )
+      .setFooter({
+        text: "Banco Judicial • Registro de Auditoria",
+      })
+      .setTimestamp();
 
+    await auditar({ embeds: [registro] });
 
+    // Comprovante público da transferência.
     const embed = new EmbedBuilder()
-    .setColor(0x1F4788)
-    .setTitle("🏦 BANCO JUDICIAL")
-    .setDescription(
-    "### ✅ Transferência realizada\n" +
-    "TRIBUNAL VIRTUAL • SISTEMA FINANCEIRO\n\n" +
-    "A operação foi concluída com sucesso e registrada no sistema."
-    )
-    .addFields(
-    {
-      name: "💰 VALOR TRANSFERIDO",
-      value: `# ＋ ${valor.toLocaleString("pt-BR")} créditos`,
-      inline: false
-    },
-    {
-      name: "📤 REMETENTE",
-      value: `${i.user}`,
-      inline: true
-    },
-    {
-      name: "📥 DESTINATÁRIO",
-      value: `${usuario}`,
-      inline: true
-    },
-    {
-      name: "📝 MOTIVO DA TRANSFERÊNCIA",
-      value: motivo,
-      inline: false
-    }
-  )
-  .setFooter({
-    text: "Banco Judicial • Comprovante eletrônico"
-  })
-  .setTimestamp();
+      .setColor(0x1F4E79)
+      .setTitle("🏦 BANCO JUDICIAL")
+      .setDescription(
+        "### ✅ Transferência realizada\n" +
+        "TRIBUNAL VIRTUAL • SISTEMA FINANCEIRO\n\n" +
+        "A operação foi concluída com sucesso e registrada no sistema."
+      )
+      .addFields(
+        {
+          name: "💰 VALOR TRANSFERIDO",
+          value: `**＋ ${formatarCreditos(valor)}**`,
+          inline: false,
+        },
+        {
+          name: "📤 REMETENTE",
+          value: `${i.user}`,
+          inline: true,
+        },
+        {
+          name: "📥 DESTINATÁRIO",
+          value: `${usuario}`,
+          inline: true,
+        },
+        {
+          name: "📝 MOTIVO DA TRANSFERÊNCIA",
+          value: motivo.slice(0, 1024),
+          inline: false,
+        }
+      )
+      .setFooter({
+        text: "Banco Judicial • Comprovante eletrônico",
+      })
+      .setTimestamp();
 
-await i.reply({
-  embeds: [embed],
-  allowedMentions: {
-    parse: [],
-    users: [i.user.id, usuario.id]
-  }
-});
+    return i.reply({
+      embeds: [embed],
+      allowedMentions: { parse: [] },
+    });
   },
+
+  // ==================================================
+  // CRÉDITO ADMINISTRATIVO
+  // ==================================================
 
   async creditar(i) {
     if (!ehAdmin(i)) {
-      return responder(i, "Sem permissão.");
+      return responder(i, "❌ Sem permissão.");
     }
 
     const usuario = i.options.getUser("membro");
     const valor = i.options.getInteger("valor");
     const motivo = i.options.getString("motivo").trim();
 
-    if (usuario.bot || !motivo) {
+    if (!usuario || usuario.bot || !motivo) {
       return responder(
         i,
-        "Informe um membro válido e uma justificativa."
+        "❌ Informe um membro válido e uma justificativa."
       );
     }
 
     transacao(() => {
       garantirConta(usuario.id);
 
-      db.prepare(
-        "UPDATE contas SET saldo = saldo + ? WHERE usuario_id = ?"
-      ).run(valor, usuario.id);
+      db.prepare(`
+        UPDATE contas
+        SET saldo = saldo + ?
+        WHERE usuario_id = ?
+      `).run(valor, usuario.id);
 
       registrar(
         null,
@@ -807,62 +948,64 @@ await i.reply({
       );
     });
 
-
-const registro = new EmbedBuilder()
-  .setColor(0x1F4788)
-  .setTitle("🏦 REGISTRO DE TRANSFERÊNCIA FINANCEIRA")
-  .setDescription(
-    "Uma transferência entre membros foi concluída e registrada no sistema financeiro do Tribunal Virtual."
-  )
-  .addFields(
-      {
-        name: "📤 Remetente",
-        value: `${i.user}`,
-        inline: true,
-      },
-      {
-       name: "📥 Destinatário",
-       value: `${usuario}`,
-       inline: true,
-      },
-     {
-        name: "💰 Valor transferido",
-        value: `**${valor.toLocaleString("pt-BR")} créditos**`,
-        inline: false,
-      },
-      {
-       name: "📝 Motivo da transferência",
-      value: motivo.slice(0, 1024),
-      inline: false,
-      }
-    )
-    .setFooter({
-     text: "Banco Judicial • Registro de Auditoria",
-    })
-    .setTimestamp();
+    const registro = new EmbedBuilder()
+      .setColor(0x237A57)
+      .setTitle("💰 CRÉDITO ADMINISTRATIVO")
+      .setDescription(
+        "Um crédito administrativo foi concedido e registrado no Banco Judicial."
+      )
+      .addFields(
+        {
+          name: "👮 Administrador responsável",
+          value: `${i.user.tag}\nID: \`${i.user.id}\``,
+          inline: true,
+        },
+        {
+          name: "📥 Beneficiário",
+          value: `${usuario.tag}\nID: \`${usuario.id}\``,
+          inline: true,
+        },
+        {
+          name: "💰 Valor concedido",
+          value: `**${formatarCreditos(valor)}**`,
+          inline: false,
+        },
+        {
+          name: "📝 Justificativa",
+          value: motivo.slice(0, 1024),
+          inline: false,
+        }
+      )
+      .setFooter({
+        text: "Banco Judicial • Auditoria administrativa",
+      })
+      .setTimestamp();
 
     await auditar({ embeds: [registro] });
 
-    await responder(
+    return responder(
       i,
-      `✅ Crédito de **${valor.toLocaleString("pt-BR")} créditos** concedido a ${usuario}.`
+      `✅ Crédito de **${formatarCreditos(valor)}** concedido a ${usuario}.`
     );
   },
 
-  
+  // ==================================================
+  // DÉBITO ADMINISTRATIVO
+  // ==================================================
+
   async debitar(i) {
     if (!ehAdmin(i)) {
-      return responder(i, "Sem permissão.");
+      return responder(i, "❌ Sem permissão.");
     }
 
     const usuario = i.options.getUser("membro");
     const valor = i.options.getInteger("valor");
     const motivo = i.options.getString("motivo").trim();
 
-    if (usuario.bot || !motivo) {
+    if (!usuario || usuario.bot || !motivo) {
       return responder(
         i,
-        "Informe um membro válido e uma justificativa."
+        "❌ Informe um membro válido e uma justificativa."
       );
     }
 
@@ -870,15 +1013,21 @@ const registro = new EmbedBuilder()
       garantirConta(TESOURO);
       garantirConta(usuario.id);
 
-      if (saldoDe(usuario.id) < valor) return false;
+      if (saldoDe(usuario.id) < valor) {
+        return false;
+      }
 
-      db.prepare(
-        "UPDATE contas SET saldo = saldo - ? WHERE usuario_id = ?"
-      ).run(valor, usuario.id);
+      db.prepare(`
+        UPDATE contas
+        SET saldo = saldo - ?
+        WHERE usuario_id = ?
+      `).run(valor, usuario.id);
 
-      db.prepare(
-        "UPDATE contas SET saldo = saldo + ? WHERE usuario_id = ?"
-      ).run(valor, TESOURO);
+      db.prepare(`
+        UPDATE contas
+        SET saldo = saldo + ?
+        WHERE usuario_id = ?
+      `).run(valor, TESOURO);
 
       registrar(
         usuario.id,
@@ -923,7 +1072,7 @@ const registro = new EmbedBuilder()
         },
         {
           name: "💰 Valor retirado",
-          value: `**${valor.toLocaleString("pt-BR")} créditos**`,
+          value: `**${formatarCreditos(valor)}**`,
           inline: false,
         },
         {
@@ -941,29 +1090,34 @@ const registro = new EmbedBuilder()
 
     return responder(
       i,
-      `✅ Foram retirados **${valor.toLocaleString("pt-BR")} créditos** de ${usuario} e transferidos ao Tesouro Judicial.`
+      `✅ Foram retirados **${formatarCreditos(valor)}** de ${usuario} e transferidos ao Tesouro Judicial.`
     );
   },
 
+  // ==================================================
+  // FINANCIAMENTO DO TESOURO
+  // ==================================================
 
   async financiar_tesouro(i) {
     if (!ehAdmin(i)) {
-      return responder(i, "Sem permissão.");
+      return responder(i, "❌ Sem permissão.");
     }
 
     const valor = i.options.getInteger("valor");
     const motivo = i.options.getString("motivo").trim();
 
     if (!motivo) {
-      return responder(i, "Informe uma justificativa.");
+      return responder(i, "❌ Informe uma justificativa.");
     }
 
     transacao(() => {
       garantirConta(TESOURO);
 
-      db.prepare(
-        "UPDATE contas SET saldo = saldo + ? WHERE usuario_id = ?"
-      ).run(valor, TESOURO);
+      db.prepare(`
+        UPDATE contas
+        SET saldo = saldo + ?
+        WHERE usuario_id = ?
+      `).run(valor, TESOURO);
 
       registrar(
         null,
@@ -975,30 +1129,53 @@ const registro = new EmbedBuilder()
       );
     });
 
-    await auditar(
-      `🏛️ TESOURO FINANCIADO | Admin ${i.user.id} | ` +
-      `${valor.toLocaleString("pt-BR")} créditos | ${motivo}`
-    );
+    const registro = new EmbedBuilder()
+      .setColor(0x1F4E79)
+      .setTitle("🏛️ FINANCIAMENTO DO TESOURO JUDICIAL")
+      .addFields(
+        {
+          name: "👮 Responsável",
+          value: `${i.user}`,
+          inline: true,
+        },
+        {
+          name: "💰 Valor adicionado",
+          value: `**${formatarCreditos(valor)}**`,
+          inline: true,
+        },
+        {
+          name: "📝 Justificativa",
+          value: motivo.slice(0, 1024),
+          inline: false,
+        }
+      )
+      .setTimestamp();
 
-    await responder(
+    await auditar({ embeds: [registro] });
+
+    return responder(
       i,
-      `🏛️ Tesouro recebeu **${valor.toLocaleString("pt-BR")} créditos**.`
+      `🏛️ O Tesouro Judicial recebeu **${formatarCreditos(valor)}**.`
     );
   },
 
+  // ==================================================
+  // SALÁRIO
+  // ==================================================
+
   async salario(i) {
     if (!ehAdmin(i)) {
-      return responder(i, "Sem permissão.");
+      return responder(i, "❌ Sem permissão.");
     }
 
     const usuario = i.options.getUser("membro");
     const valor = i.options.getInteger("valor");
     const motivo = i.options.getString("motivo").trim();
 
-    if (usuario.bot || !motivo) {
+    if (!usuario || usuario.bot || !motivo) {
       return responder(
         i,
-        "Informe um membro válido e uma justificativa."
+        "❌ Informe um membro válido e uma justificativa."
       );
     }
 
@@ -1006,15 +1183,21 @@ const registro = new EmbedBuilder()
       garantirConta(TESOURO);
       garantirConta(usuario.id);
 
-      if (saldoDe(TESOURO) < valor) return false;
+      if (saldoDe(TESOURO) < valor) {
+        return false;
+      }
 
-      db.prepare(
-        "UPDATE contas SET saldo = saldo - ? WHERE usuario_id = ?"
-      ).run(valor, TESOURO);
+      db.prepare(`
+        UPDATE contas
+        SET saldo = saldo - ?
+        WHERE usuario_id = ?
+      `).run(valor, TESOURO);
 
-      db.prepare(
-        "UPDATE contas SET saldo = saldo + ? WHERE usuario_id = ?"
-      ).run(valor, usuario.id);
+      db.prepare(`
+        UPDATE contas
+        SET saldo = saldo + ?
+        WHERE usuario_id = ?
+      `).run(valor, usuario.id);
 
       registrar(
         TESOURO,
@@ -1031,33 +1214,63 @@ const registro = new EmbedBuilder()
     if (!pago) {
       return responder(
         i,
-        "❌ O tesouro não possui créditos suficientes."
+        "❌ O Tesouro Judicial não possui créditos suficientes."
       );
     }
 
-    await auditar(
-      `💼 SALÁRIO | Admin ${i.user.id} | ${usuario.id} | ` +
-      `${valor.toLocaleString("pt-BR")} créditos | ${motivo}`
-    );
+    const registro = new EmbedBuilder()
+      .setColor(0x237A57)
+      .setTitle("💼 REGISTRO DE PAGAMENTO DE SALÁRIO")
+      .addFields(
+        {
+          name: "👮 Administrador responsável",
+          value: `${i.user}`,
+          inline: true,
+        },
+        {
+          name: "👤 Funcionário",
+          value: `${usuario}`,
+          inline: true,
+        },
+        {
+          name: "💰 Valor pago",
+          value: `**${formatarCreditos(valor)}**`,
+          inline: false,
+        },
+        {
+          name: "📝 Descrição",
+          value: motivo.slice(0, 1024),
+          inline: false,
+        }
+      )
+      .setTimestamp();
 
-    await responder(
+    await auditar({ embeds: [registro] });
+
+    return responder(
       i,
-      `💼 Salário de **${valor.toLocaleString("pt-BR")} créditos** pago a ${usuario}.`
+      `💼 Salário de **${formatarCreditos(valor)}** pago a ${usuario}.`
     );
   },
 
   async multa(i) {
-    await cobrar(i, "multa");
+    return cobrar(i, "multa");
   },
 
   async imposto(i) {
-    await cobrar(i, "imposto");
+    return cobrar(i, "imposto");
   },
 
-  
+  // ==================================================
+  // AUDITORIA FINANCEIRA
+  // ==================================================
+
   async auditoria(i) {
     if (!ehAdmin(i)) {
-      return responder(i, "❌ Apenas administradores podem acessar a auditoria.");
+      return responder(
+        i,
+        "❌ Apenas administradores podem acessar a auditoria."
+      );
     }
 
     const membro = i.options.getUser("membro");
@@ -1087,21 +1300,29 @@ const registro = new EmbedBuilder()
       ${where}
     `).get(...parametros).quantidade;
 
-    const totalPaginas = Math.max(1, Math.ceil(total / 10));
+    const totalPaginas = Math.max(
+      1,
+      Math.ceil(total / 10)
+    );
 
     if (pagina > totalPaginas) {
-      return responder(i, `❌ Página inválida. Existem ${totalPaginas} páginas.`);
+      return responder(
+        i,
+        `❌ Página inválida. Existem ${totalPaginas} páginas.`
+      );
     }
 
     const linhas = db.prepare(`
-      SELECT * FROM transacoes
+      SELECT *
+      FROM transacoes
       ${where}
       ORDER BY id DESC
       LIMIT ? OFFSET ?
-    `).all(...parametros, 10, (pagina - 1) * 10);
-
-    const formatar = (valor) =>
-      `${valor.toLocaleString("pt-BR")} créditos`;
+    `).all(
+      ...parametros,
+      10,
+      (pagina - 1) * 10
+    );
 
     const nomeConta = (id) => {
       if (!id) return "Sistema";
@@ -1110,18 +1331,11 @@ const registro = new EmbedBuilder()
     };
 
     const registros = linhas.map((t) => {
-      const data = new Date(t.data).toLocaleString("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      const data = formatarData(t.data);
 
       return [
         `**#${t.id} — ${t.tipo.replace(/_/g, " ").toUpperCase()}**`,
-        `💰 **Valor:** ${formatar(t.valor)}`,
+        `💰 **Valor:** ${formatarCreditos(t.valor)}`,
         `📤 **Origem:** ${nomeConta(t.origem)}`,
         `📥 **Destino:** ${nomeConta(t.destino)}`,
         `👮 **Responsável:** ${nomeConta(t.operador)}`,
@@ -1130,22 +1344,28 @@ const registro = new EmbedBuilder()
       ].join("\n");
     });
 
+    const descricao = [
+      `**Registros encontrados:** ${total}`,
+      `**Filtro de membro:** ${membro ? membro.tag : "Todos"}`,
+      `**Tipo:** ${tipo ? tipo.replace(/_/g, " ") : "Todos"}`,
+      "",
+      `## 📑 Movimentações — Página ${pagina}/${totalPaginas}`,
+      "",
+      registros.length
+        ? registros.join("\n\n━━━━━━━━━━━━━━\n\n")
+        : "Nenhuma movimentação encontrada.",
+    ].join("\n");
+
     const embed = new EmbedBuilder()
       .setColor(0x1F4E79)
-      .setAuthor({ name: "TRIBUNAL VIRTUAL • BANCO JUDICIAL" })
-      .setTitle("📋 AUDITORIA FINANCEIRA")
-      .setDescription(
-        `**Registros encontrados:** ${total}\n` +
-        `**Filtro de membro:** ${membro ?? "Todos"}\n` +
-        `**Tipo:** ${tipo ? tipo.replace(/_/g, " ") : "Todos"}`
-      )
-      .addFields({
-        name: `📑 Movimentações — Página ${pagina}/${totalPaginas}`,
-        value: registros.length
-          ? registros.join("\n\n━━━━━━━━━━━━━━\n\n").slice(0, 3900)
-          : "Nenhuma movimentação encontrada.",
+      .setAuthor({
+        name: "TRIBUNAL VIRTUAL • BANCO JUDICIAL",
       })
-      .setFooter({ text: "Banco Judicial • Acesso administrativo" })
+      .setTitle("📋 AUDITORIA FINANCEIRA")
+      .setDescription(descricao.slice(0, 4096))
+      .setFooter({
+        text: "Banco Judicial • Acesso administrativo",
+      })
       .setTimestamp();
 
     return i.reply({
@@ -1156,19 +1376,23 @@ const registro = new EmbedBuilder()
   },
 };
 
+// ==================================================
+// MULTAS E IMPOSTOS
+// ==================================================
+
 async function cobrar(i, tipo) {
   if (!ehAdmin(i)) {
-    return responder(i, "Sem permissão.");
+    return responder(i, "❌ Sem permissão.");
   }
 
   const usuario = i.options.getUser("membro");
   const valor = i.options.getInteger("valor");
   const motivo = i.options.getString("motivo").trim();
 
-  if (usuario.bot || !motivo) {
+  if (!usuario || usuario.bot || !motivo) {
     return responder(
       i,
-      "Informe um membro válido e uma justificativa."
+      "❌ Informe um membro válido e uma justificativa."
     );
   }
 
@@ -1176,15 +1400,21 @@ async function cobrar(i, tipo) {
     garantirConta(TESOURO);
     garantirConta(usuario.id);
 
-    if (saldoDe(usuario.id) < valor) return false;
+    if (saldoDe(usuario.id) < valor) {
+      return false;
+    }
 
-    db.prepare(
-      "UPDATE contas SET saldo = saldo - ? WHERE usuario_id = ?"
-    ).run(valor, usuario.id);
+    db.prepare(`
+      UPDATE contas
+      SET saldo = saldo - ?
+      WHERE usuario_id = ?
+    `).run(valor, usuario.id);
 
-    db.prepare(
-      "UPDATE contas SET saldo = saldo + ? WHERE usuario_id = ?"
-    ).run(valor, TESOURO);
+    db.prepare(`
+      UPDATE contas
+      SET saldo = saldo + ?
+      WHERE usuario_id = ?
+    `).run(valor, TESOURO);
 
     registrar(
       usuario.id,
@@ -1204,7 +1434,6 @@ async function cobrar(i, tipo) {
       "❌ O membro não possui saldo suficiente."
     );
   }
-
 
   if (tipo === "multa") {
     const registro = new EmbedBuilder()
@@ -1232,7 +1461,7 @@ async function cobrar(i, tipo) {
         },
         {
           name: "💰 Valor da penalidade",
-          value: `**${valor.toLocaleString("pt-BR")} créditos**`,
+          value: `**${formatarCreditos(valor)}**`,
           inline: false,
         },
         {
@@ -1253,28 +1482,71 @@ async function cobrar(i, tipo) {
 
     await auditar({ embeds: [registro] });
   } else {
-    await auditar(
-      `🏛️ ${tipo.toUpperCase()} | Admin ${i.user.id} | ` +
-      `Membro ${usuario.id} | ${valor.toLocaleString("pt-BR")} créditos | ${motivo}`
-    );
-  }
+    const registro = new EmbedBuilder()
+      .setColor(0xB8860B)
+      .setTitle("🏛️ REGISTRO DE IMPOSTO")
+      .addFields(
+        {
+          name: "👮 Responsável",
+          value: `${i.user}`,
+          inline: true,
+        },
+        {
+          name: "👤 Contribuinte",
+          value: `${usuario}`,
+          inline: true,
+        },
+        {
+          name: "💰 Valor cobrado",
+          value: `**${formatarCreditos(valor)}**`,
+          inline: false,
+        },
+        {
+          name: "📝 Justificativa",
+          value: motivo.slice(0, 1024),
+          inline: false,
+        },
+        {
+          name: "🏛️ Destino dos valores",
+          value: "Tesouro Judicial",
+          inline: false,
+        }
+      )
+      .setFooter({
+        text: "Banco Judicial • Registro de Auditoria",
+      })
+      .setTimestamp();
 
+    await auditar({ embeds: [registro] });
+  }
 
   return responder(
     i,
-    `✅ ${tipo} de **${valor.toLocaleString("pt-BR")} créditos** aplicado a ${usuario}.`
+    `✅ ${tipo === "multa" ? "Multa" : "Imposto"} de **${formatarCreditos(valor)}** aplicado a ${usuario}.`
   );
 }
+
+// ==================================================
+// INICIALIZAÇÃO DO BOT
+// ==================================================
 
 client.once("ready", async () => {
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
+
     await guild.commands.set(comandos);
 
-    console.log(`Banco Judicial online como ${client.user.tag}`);
-    console.log(`Comandos registrados no servidor ${guild.name}`);
+    console.log(
+      `Banco Judicial online como ${client.user.tag}`
+    );
+    console.log(
+      `Comandos registrados no servidor ${guild.name}`
+    );
   } catch (erro) {
-    console.error("Erro ao registrar os comandos:", erro);
+    console.error(
+      "Erro ao registrar os comandos:",
+      erro
+    );
   }
 });
 
@@ -1292,10 +1564,17 @@ client.on("interactionCreate", async (interaction) => {
       erro
     );
 
-    await responder(
-      interaction,
-      "Ocorreu um erro. Tente novamente."
-    );
+    try {
+      await responder(
+        interaction,
+        "❌ Ocorreu um erro ao executar o comando. Tente novamente."
+      );
+    } catch (erroResposta) {
+      console.error(
+        "Não foi possível responder à interação:",
+        erroResposta
+      );
+    }
   }
 });
 
